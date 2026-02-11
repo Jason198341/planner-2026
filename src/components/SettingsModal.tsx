@@ -2,22 +2,19 @@ import { useState } from 'react'
 import { X, RotateCcw } from 'lucide-react'
 import { usePlannerStore } from '@/store'
 
-const DAYS = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일']
-
 export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const { settings, updateSettings } = usePlannerStore()
   const [name, setName] = useState(settings.userName)
   const [year, setYear] = useState(settings.year)
-  const [startDay, setStartDay] = useState(settings.startDay)
 
   const save = () => {
-    updateSettings({ userName: name, year, startDay })
+    updateSettings({ userName: name, year })
     onClose()
   }
 
   const reset = () => {
     if (confirm('모든 데이터가 삭제됩니다. 정말 초기화하시겠습니까?')) {
-      localStorage.removeItem('planner-2026')
+      localStorage.removeItem('review-calendar-2026')
       location.reload()
     }
   }
@@ -57,25 +54,6 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                   }`}
                 >
                   {y}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-surface-600 mb-1 block">주 시작 요일</label>
-            <div className="grid grid-cols-4 gap-2">
-              {DAYS.map((label, i) => (
-                <button
-                  key={i}
-                  onClick={() => setStartDay(i)}
-                  className={`px-2 py-2 rounded-lg text-xs font-medium transition-all ${
-                    startDay === i
-                      ? 'bg-brand-500 text-white'
-                      : 'bg-surface-100 text-surface-600 hover:bg-surface-200'
-                  }`}
-                >
-                  {label}
                 </button>
               ))}
             </div>

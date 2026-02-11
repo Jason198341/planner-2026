@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { usePlannerStore } from '@/store'
 import { generateMonthGrid, formatDate, dayLabels, monthName } from '@/utils/calendar'
+import { getTodayStr } from '@/utils/review'
 
 export default function CalendarView() {
   const {
@@ -10,7 +11,8 @@ export default function CalendarView() {
     setSelectedMonth,
     selectedDate,
     setSelectedDate,
-    todos,
+    studyEntries,
+    reviewTasks,
   } = usePlannerStore()
 
   const year = settings.year
@@ -20,21 +22,34 @@ export default function CalendarView() {
   )
   const labels = useMemo(() => dayLabels(settings.startDay), [settings.startDay])
 
-  const todoCounts = useMemo(() => {
-    const map: Record<string, { total: number; done: number }> = {}
-    for (const t of todos) {
-      if (!map[t.date]) map[t.date] = { total: 0, done: 0 }
-      map[t.date].total++
-      if (t.completed) map[t.date].done++
+  const todayStr = getTodayStr()
+
+  // Build status map for each date
+  const dateStatus = useMemo(() => {
+    const map: Record<string, { hasStudy: boolean; reviewTotal: number; reviewDone: number; hasOverdue: boolean }> = {}
+
+    // Mark study entries
+    for (const e of studyEntries) {
+      if (!map[e.studiedAt]) map[e.studiedAt] = { hasStudy: false, reviewTotal: 0, reviewDone: 0, hasOverdue: false }
+      map[e.studiedAt].hasStudy = true
     }
+
+    // Mark review tasks
+    for (const r of reviewTasks) {
+      if (!map[r.dueDate]) map[r.dueDate] = { hasStudy: false, reviewTotal: 0, reviewDone: 0, hasOverdue: false }
+      map[r.dueDate].reviewTotal++
+      if (r.completed) map[r.dueDate].reviewDone++
+      // Mark overdue
+      if (!r.completed && r.dueDate < todayStr) {
+        map[r.dueDate].hasOverdue = true
+      }
+    }
+
     return map
-  }, [todos])
+  }, [studyEntries, reviewTasks, todayStr])
 
   const prevMonth = () => setSelectedMonth(selectedMonth === 1 ? 12 : selectedMonth - 1)
   const nextMonth = () => setSelectedMonth(selectedMonth === 12 ? 1 : selectedMonth + 1)
-
-  const today = new Date()
-  const todayStr = formatDate(today.getFullYear(), today.getMonth() + 1, today.getDate())
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-surface-100 p-5">
@@ -72,8 +87,21 @@ export default function CalendarView() {
           const dateStr = formatDate(year, selectedMonth, day)
           const isSelected = dateStr === selectedDate
           const isToday = dateStr === todayStr
-          const counts = todoCounts[dateStr]
-          const allDone = counts && counts.total > 0 && counts.done === counts.total
+          const status = dateStatus[dateStr]
+
+          // Determine dot color: red > orange > green > blue
+          let dotColor: string | null = null
+          if (status) {
+            if (status.hasOverdue) {
+              dotColor = '#e74c3c' // red - overdue
+            } else if (status.reviewTotal > 0 && status.reviewDone < status.reviewTotal) {
+              dotColor = '#f5cba7' // orange - reviews pending
+            } else if (status.hasStudy) {
+              dotColor = '#a9dfbf' // green - has study
+            } else if (status.reviewTotal > 0 && status.reviewDone === status.reviewTotal) {
+              dotColor = '#a8d8ea' // blue - all reviews done
+            }
+          }
 
           return (
             <button
@@ -88,18 +116,25 @@ export default function CalendarView() {
               }`}
             >
               <span>{day}</span>
-              {counts && counts.total > 0 && (
+              {dotColor && (
                 <div className="flex gap-0.5">
-                  {allDone ? (
-                    <div className="w-1.5 h-1.5 rounded-full bg-pastel-green" />
-                  ) : (
-                    <div className="w-1.5 h-1.5 rounded-full bg-pastel-orange" />
-                  )}
+                  <div
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ backgroundColor: isSelected ? 'rgba(255,255,255,0.8)' : dotColor }}
+                  />
                 </div>
               )}
             </button>
           )
         })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center justify-center gap-3 mt-3 text-[10px] text-surface-400">
+        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: '#a9dfbf' }} /> 학습</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: '#a8d8ea' }} /> 복습완료</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: '#f5cba7' }} /> 복습예정</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: '#e74c3c' }} /> 기한초과</span>
       </div>
     </div>
   )

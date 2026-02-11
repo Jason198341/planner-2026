@@ -1,23 +1,23 @@
 import { useMemo, useEffect, useState } from 'react'
 import { usePlannerStore } from '@/store'
+import { getTodayReviews } from '@/utils/review'
 
 const CONFETTI_COLORS = ['#a8d8ea', '#f5b7b1', '#a9dfbf', '#d2b4de', '#f9e79f', '#f5cba7']
 
-export default function RunnerGauge() {
-  const { selectedDate, todos } = usePlannerStore()
+export default function ReviewGauge() {
+  const { selectedDate, reviewTasks } = usePlannerStore()
   const [showCelebration, setShowCelebration] = useState(false)
   const [prevPct, setPrevPct] = useState(0)
 
-  const dayTodos = useMemo(
-    () => todos.filter((t) => t.date === selectedDate),
-    [todos, selectedDate],
+  const todayReviews = useMemo(
+    () => getTodayReviews(reviewTasks, selectedDate),
+    [reviewTasks, selectedDate],
   )
 
-  const total = dayTodos.length
-  const completed = dayTodos.filter((t) => t.completed).length
+  const total = todayReviews.length
+  const completed = todayReviews.filter((r) => r.completed).length
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0
 
-  // Trigger celebration when hitting 100%
   useEffect(() => {
     if (pct === 100 && prevPct < 100 && total > 0) {
       setShowCelebration(true)
@@ -30,9 +30,9 @@ export default function RunnerGauge() {
   if (total === 0) {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-surface-100 p-5">
-        <h3 className="text-sm font-semibold text-surface-400 mb-3">🏃 오늘의 달성률</h3>
+        <h3 className="text-sm font-semibold text-surface-400 mb-3">🧠 오늘의 복습 달성률</h3>
         <div className="text-center py-4 text-surface-300 text-sm">
-          할 일을 추가하면 러너가 출발합니다!
+          이 날짜에 예정된 복습이 없어요
         </div>
       </div>
     )
@@ -59,7 +59,7 @@ export default function RunnerGauge() {
       )}
 
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-surface-400">🏃 오늘의 달성률</h3>
+        <h3 className="text-sm font-semibold text-surface-400">🧠 오늘의 복습 달성률</h3>
         <span
           className={`text-2xl font-bold ${
             pct === 100 ? 'text-green-500 celebrate' : 'text-brand-500'
@@ -71,10 +71,8 @@ export default function RunnerGauge() {
 
       {/* Track */}
       <div className="relative h-12 mb-2">
-        {/* Ground line */}
         <div className="absolute bottom-2 left-0 right-0 h-0.5 bg-surface-200 rounded" />
 
-        {/* Track markers */}
         <div className="absolute bottom-2 left-0 right-0 flex justify-between px-1">
           {[0, 25, 50, 75, 100].map((mark) => (
             <div
@@ -85,7 +83,6 @@ export default function RunnerGauge() {
           ))}
         </div>
 
-        {/* Progress fill */}
         <div
           className="absolute bottom-2 left-0 h-1 rounded-full transition-all duration-500 ease-out"
           style={{
@@ -96,7 +93,6 @@ export default function RunnerGauge() {
           }}
         />
 
-        {/* Runner character */}
         <div
           className={`absolute bottom-3 transition-all duration-500 ease-out ${
             pct > 0 && pct < 100 ? 'runner-bounce' : ''
@@ -110,26 +106,23 @@ export default function RunnerGauge() {
           </span>
         </div>
 
-        {/* Finish flag */}
         <div className="absolute bottom-3 right-0">
           <span className="text-lg">🏁</span>
         </div>
       </div>
 
-      {/* Status message */}
       <p className={`text-center text-sm font-medium ${pct === 100 ? 'text-green-600' : 'text-surface-500'}`}>
         {pct === 100
-          ? '🎉 완벽한 하루! 모든 할 일을 완료했어요!'
+          ? '🎉 완벽! 오늘 복습을 모두 마쳤어요!'
           : pct >= 75
-            ? '거의 다 왔어요! 조금만 더 힘내세요!'
+            ? '거의 다 왔어요! 조금만 더!'
             : pct >= 50
-              ? '절반을 넘겼어요! 좋은 페이스입니다 💪'
+              ? '절반 완료! 좋은 페이스입니다 💪'
               : pct > 0
-                ? '좋은 시작이에요! 계속 달려보세요 🏃'
-                : '첫 할 일을 완료해보세요!'}
+                ? '좋은 시작이에요! 계속 복습해보세요 🧠'
+                : '첫 복습을 완료해보세요!'}
       </p>
 
-      {/* Mini stats */}
       <div className="flex justify-center gap-4 mt-3 text-xs text-surface-400">
         <span>완료 <strong className="text-brand-500">{completed}</strong></span>
         <span>남음 <strong className="text-pastel-orange">{total - completed}</strong></span>

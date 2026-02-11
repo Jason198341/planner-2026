@@ -5,23 +5,25 @@ import {
 } from 'recharts'
 import { usePlannerStore } from '@/store'
 import { getWeekNumber, getAllDatesInYear } from '@/utils/calendar'
+import { getStudyStreak, getTodayStr } from '@/utils/review'
 import { TrendingUp, PieChart as PieIcon, Grid3X3 } from 'lucide-react'
 
 const CHART_COLORS = ['#a8d8ea', '#f5b7b1', '#a9dfbf', '#d2b4de', '#f9e79f', '#f5cba7', '#a3e4d7', '#f1948a']
 
 export default function DashboardView() {
-  const { settings, todos, categories } = usePlannerStore()
+  const { settings, studyEntries, reviewTasks, subjects } = usePlannerStore()
   const year = settings.year
+  const todayStr = getTodayStr()
 
-  // ── Weekly achievement data ──
+  // ── Weekly review completion data ──
   const weeklyData = useMemo(() => {
     const weeks: Record<number, { total: number; done: number }> = {}
-    for (const t of todos) {
-      if (!t.date.startsWith(String(year))) continue
-      const w = getWeekNumber(t.date)
+    for (const r of reviewTasks) {
+      if (!r.dueDate.startsWith(String(year))) continue
+      const w = getWeekNumber(r.dueDate)
       if (!weeks[w]) weeks[w] = { total: 0, done: 0 }
       weeks[w].total++
-      if (t.completed) weeks[w].done++
+      if (r.completed) weeks[w].done++
     }
     return Object.entries(weeks)
       .map(([week, data]) => ({
@@ -31,65 +33,71 @@ export default function DashboardView() {
         전체: data.total,
       }))
       .sort((a, b) => parseInt(a.name) - parseInt(b.name))
-  }, [todos, year])
+  }, [reviewTasks, year])
 
-  // ── Category distribution data ──
-  const categoryData = useMemo(() => {
+  // ── Subject distribution data ──
+  const subjectData = useMemo(() => {
     const counts: Record<string, number> = {}
-    for (const t of todos) {
-      if (!t.date.startsWith(String(year))) continue
-      counts[t.categoryId] = (counts[t.categoryId] || 0) + 1
+    for (const e of studyEntries) {
+      if (!e.studiedAt.startsWith(String(year))) continue
+      counts[e.subjectId] = (counts[e.subjectId] || 0) + 1
     }
-    return categories
-      .filter((c) => counts[c.id])
-      .map((c) => ({
-        name: `${c.icon} ${c.name}`,
-        value: counts[c.id],
-        color: c.color,
+    return subjects
+      .filter((s) => counts[s.id])
+      .map((s) => ({
+        name: `${s.icon} ${s.name}`,
+        value: counts[s.id],
+        color: s.color,
       }))
-  }, [todos, categories, year])
+  }, [studyEntries, subjects, year])
 
   // ── Annual heatmap data ──
   const heatmapData = useMemo(() => {
     const allDates = getAllDatesInYear(year)
-    const dateMap: Record<string, { total: number; done: number }> = {}
-    for (const t of todos) {
-      if (!t.date.startsWith(String(year))) continue
-      if (!dateMap[t.date]) dateMap[t.date] = { total: 0, done: 0 }
-      dateMap[t.date].total++
-      if (t.completed) dateMap[t.date].done++
+    const dateMap: Record<string, number> = {}
+
+    // Count study entries
+    for (const e of studyEntries) {
+      if (!e.studiedAt.startsWith(String(year))) continue
+      dateMap[e.studiedAt] = (dateMap[e.studiedAt] || 0) + 1
     }
+    // Count completed reviews
+    for (const r of reviewTasks) {
+      if (!r.completed || !r.completedAt?.startsWith(String(year))) continue
+      dateMap[r.completedAt] = (dateMap[r.completedAt] || 0) + 1
+    }
+
     return allDates.map((date) => ({
       date,
-      count: dateMap[date]?.done ?? 0,
-      total: dateMap[date]?.total ?? 0,
+      count: dateMap[date] ?? 0,
     }))
-  }, [todos, year])
+  }, [studyEntries, reviewTasks, year])
 
   // Overall stats
-  const yearTodos = todos.filter((t) => t.date.startsWith(String(year)))
-  const totalTasks = yearTodos.length
-  const completedTasks = yearTodos.filter((t) => t.completed).length
-  const overallRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
-  const activeDays = new Set(yearTodos.map((t) => t.date)).size
+  const yearEntries = studyEntries.filter((e) => e.studiedAt.startsWith(String(year)))
+  const yearReviews = reviewTasks.filter((r) => r.dueDate.startsWith(String(year)))
+  const totalStudy = yearEntries.length
+  const completedReviews = yearReviews.filter((r) => r.completed).length
+  const reviewRate = yearReviews.length > 0 ? Math.round((completedReviews / yearReviews.length) * 100) : 0
+  const streak = getStudyStreak(studyEntries, todayStr)
 
   return (
     <div className="space-y-6">
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="총 할 일" value={totalTasks} icon="📋" color="bg-pastel-blue/30" />
-        <StatCard label="완료" value={completedTasks} icon="✅" color="bg-pastel-green/30" />
-        <StatCard label="달성률" value={`${overallRate}%`} icon="📊" color="bg-pastel-purple/30" />
-        <StatCard label="활동 일수" value={activeDays} icon="🔥" color="bg-pastel-orange/30" />
+        <StatCard label="총 학습" value={totalStudy} icon="📚" color="bg-pastel-blue/30" />
+        <StatCard label="복습 완료" value={completedReviews} icon="✅" color="bg-pastel-green/30" />
+        <StatCard label="복습률" value={`${reviewRate}%`} icon="📊" color="bg-pastel-purple/30" />
+        <StatCard label="연속 학습일" value={`${streak}일`} icon="🔥" color="bg-pastel-orange/30" />
       </div>
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Weekly achievement chart */}
+        {/* Weekly review chart */}
         <div className="bg-white rounded-2xl shadow-sm border border-surface-100 p-5">
           <div className="flex items-center gap-2 mb-4">
             <TrendingUp className="w-5 h-5 text-brand-500" />
-            <h3 className="text-base font-bold text-surface-800">주차별 달성률</h3>
+            <h3 className="text-base font-bold text-surface-800">주차별 복습 달성률</h3>
           </div>
           {weeklyData.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
@@ -103,10 +111,6 @@ export default function DashboardView() {
                     border: 'none',
                     boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                   }}
-                  formatter={(value: number, name: string) => [
-                    name === '달성률' ? `${value}%` : value,
-                    name,
-                  ]}
                 />
                 <Bar dataKey="달성률" fill="#818cf8" radius={[6, 6, 0, 0]} />
               </BarChart>
@@ -116,17 +120,17 @@ export default function DashboardView() {
           )}
         </div>
 
-        {/* Category distribution */}
+        {/* Subject distribution */}
         <div className="bg-white rounded-2xl shadow-sm border border-surface-100 p-5">
           <div className="flex items-center gap-2 mb-4">
             <PieIcon className="w-5 h-5 text-pastel-purple" />
-            <h3 className="text-base font-bold text-surface-800">카테고리별 비중</h3>
+            <h3 className="text-base font-bold text-surface-800">과목별 학습 비중</h3>
           </div>
-          {categoryData.length > 0 ? (
+          {subjectData.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
                 <Pie
-                  data={categoryData}
+                  data={subjectData}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -134,7 +138,7 @@ export default function DashboardView() {
                   paddingAngle={3}
                   dataKey="value"
                 >
-                  {categoryData.map((entry, i) => (
+                  {subjectData.map((entry, i) => (
                     <Cell key={i} fill={entry.color || CHART_COLORS[i % CHART_COLORS.length]} />
                   ))}
                 </Pie>
@@ -162,7 +166,7 @@ export default function DashboardView() {
       <div className="bg-white rounded-2xl shadow-sm border border-surface-100 p-5">
         <div className="flex items-center gap-2 mb-4">
           <Grid3X3 className="w-5 h-5 text-heat-3" />
-          <h3 className="text-base font-bold text-surface-800">{year}년 연간 히트맵</h3>
+          <h3 className="text-base font-bold text-surface-800">{year}년 학습 히트맵</h3>
         </div>
         <AnnualHeatmap data={heatmapData} year={year} />
       </div>
@@ -193,7 +197,7 @@ function StatCard({
 function EmptyChart() {
   return (
     <div className="h-[260px] flex items-center justify-center text-surface-300 text-sm">
-      데이터가 쌓이면 차트가 나타납니다
+      학습 데이터가 쌓이면 차트가 나타납니다
     </div>
   )
 }
@@ -203,20 +207,18 @@ function AnnualHeatmap({
   data,
   year,
 }: {
-  data: { date: string; count: number; total: number }[]
+  data: { date: string; count: number }[]
   year: number
 }) {
   const MONTH_LABELS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
 
-  // Group by week columns (Sun-based for GitHub style)
-  const weeks: { date: string; count: number; total: number; day: number }[][] = []
+  const weeks: { date: string; count: number; day: number }[][] = []
   let currentWeek: typeof weeks[0] = []
 
   const startDate = new Date(year, 0, 1)
-  // Pad first week
   const firstDay = startDate.getDay()
   for (let i = 0; i < firstDay; i++) {
-    currentWeek.push({ date: '', count: -1, total: 0, day: i })
+    currentWeek.push({ date: '', count: -1, day: i })
   }
 
   for (const d of data) {
@@ -230,7 +232,6 @@ function AnnualHeatmap({
   }
   if (currentWeek.length > 0) weeks.push(currentWeek)
 
-  // Month label positions
   const monthPositions: { label: string; col: number }[] = []
   let colIndex = 0
   for (const week of weeks) {
@@ -257,7 +258,6 @@ function AnnualHeatmap({
 
   return (
     <div className="overflow-x-auto">
-      {/* Month labels */}
       <div className="flex mb-1 ml-8" style={{ gap: 0 }}>
         {monthPositions.map((mp, i) => (
           <div
@@ -276,7 +276,6 @@ function AnnualHeatmap({
       </div>
 
       <div className="flex gap-0.5">
-        {/* Day labels */}
         <div className="flex flex-col gap-0.5 mr-1 pt-0.5">
           {['', '월', '', '수', '', '금', ''].map((l, i) => (
             <div key={i} className="text-[10px] text-surface-400 h-[11px] leading-[11px]">
@@ -285,7 +284,6 @@ function AnnualHeatmap({
           ))}
         </div>
 
-        {/* Heatmap cells */}
         {weeks.map((week, wi) => (
           <div key={wi} className="flex flex-col gap-0.5">
             {Array.from({ length: 7 }).map((_, di) => {
@@ -298,7 +296,7 @@ function AnnualHeatmap({
                   key={di}
                   className="w-[11px] h-[11px] rounded-sm transition-colors"
                   style={{ backgroundColor: getColor(cell.count) }}
-                  title={`${cell.date}: ${cell.count}개 완료 / ${cell.total}개`}
+                  title={`${cell.date}: ${cell.count}건 활동`}
                 />
               )
             })}
@@ -306,7 +304,6 @@ function AnnualHeatmap({
         ))}
       </div>
 
-      {/* Legend */}
       <div className="flex items-center justify-end gap-1 mt-3 text-xs text-surface-400">
         <span>적음</span>
         {[0, 1, 2, 3, 4].map((level) => (

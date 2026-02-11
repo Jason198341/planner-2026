@@ -40,6 +40,12 @@
   --color-heat-2: #40c463;
   --color-heat-3: #30a14e;
   --color-heat-4: #216e39;
+
+  /* Importance highlighter colors */
+  --color-imp-green: #a9dfbf;
+  --color-imp-yellow: #f9e79f;
+  --color-imp-orange: #f5cba7;
+  --color-imp-pink: #f5b7b1;
 }
 
 @layer base {

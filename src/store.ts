@@ -1,25 +1,35 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Category, Todo, Settings, ViewType } from './types'
-import { DEFAULT_CATEGORIES } from './types'
+import type { Subject, StudyEntry, ReviewTask, Settings, ViewType, TimerState, Retention } from './types'
+import { DEFAULT_SUBJECTS } from './types'
+import { generateReviewTasks, getTodayStr } from './utils/review'
 
 interface PlannerState {
   // Settings
   settings: Settings
   updateSettings: (patch: Partial<Settings>) => void
 
-  // Categories
-  categories: Category[]
-  addCategory: (cat: Category) => void
-  updateCategory: (id: string, patch: Partial<Category>) => void
-  removeCategory: (id: string) => void
+  // Subjects (기존 Categories)
+  subjects: Subject[]
+  addSubject: (sub: Subject) => void
+  updateSubject: (id: string, patch: Partial<Subject>) => void
+  removeSubject: (id: string) => void
 
-  // Todos
-  todos: Todo[]
-  addTodo: (todo: Todo) => void
-  toggleTodo: (id: string) => void
-  removeTodo: (id: string) => void
-  updateTodo: (id: string, patch: Partial<Todo>) => void
+  // Study Entries
+  studyEntries: StudyEntry[]
+  addStudyEntry: (entry: StudyEntry) => void
+  removeStudyEntry: (id: string) => void
+
+  // Review Tasks
+  reviewTasks: ReviewTask[]
+  completeReview: (id: string, retention: Retention) => void
+  uncompleteReview: (id: string) => void
+
+  // Timer (stopwatch)
+  timer: TimerState
+  startTimer: () => void
+  stopTimer: () => void
+  resetTimer: () => void
 
   // UI
   view: ViewType
@@ -32,51 +42,84 @@ interface PlannerState {
   setShowSettings: (s: boolean) => void
 }
 
+const todayStr = getTodayStr()
 const today = new Date()
-const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
 export const usePlannerStore = create<PlannerState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Settings
       settings: {
         userName: '',
         year: 2026,
-        startDay: 1, // Monday
+        startDay: 1,
         setupDone: false,
       },
       updateSettings: (patch) =>
         set((s) => ({ settings: { ...s.settings, ...patch } })),
 
-      // Categories
-      categories: DEFAULT_CATEGORIES,
-      addCategory: (cat) =>
-        set((s) => ({ categories: [...s.categories, cat] })),
-      updateCategory: (id, patch) =>
+      // Subjects
+      subjects: DEFAULT_SUBJECTS,
+      addSubject: (sub) =>
+        set((s) => ({ subjects: [...s.subjects, sub] })),
+      updateSubject: (id, patch) =>
         set((s) => ({
-          categories: s.categories.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+          subjects: s.subjects.map((c) => (c.id === id ? { ...c, ...patch } : c)),
         })),
-      removeCategory: (id) =>
+      removeSubject: (id) =>
+        set((s) => {
+          const entryIds = new Set(s.studyEntries.filter((e) => e.subjectId === id).map((e) => e.id))
+          return {
+            subjects: s.subjects.filter((c) => c.id !== id),
+            studyEntries: s.studyEntries.filter((e) => e.subjectId !== id),
+            reviewTasks: s.reviewTasks.filter((r) => !entryIds.has(r.entryId)),
+          }
+        }),
+
+      // Study Entries
+      studyEntries: [],
+      addStudyEntry: (entry) =>
         set((s) => ({
-          categories: s.categories.filter((c) => c.id !== id),
-          todos: s.todos.filter((t) => t.categoryId !== id),
+          studyEntries: [...s.studyEntries, entry],
+          reviewTasks: [...s.reviewTasks, ...generateReviewTasks(entry)],
+        })),
+      removeStudyEntry: (id) =>
+        set((s) => ({
+          studyEntries: s.studyEntries.filter((e) => e.id !== id),
+          reviewTasks: s.reviewTasks.filter((r) => r.entryId !== id),
         })),
 
-      // Todos
-      todos: [],
-      addTodo: (todo) => set((s) => ({ todos: [...s.todos, todo] })),
-      toggleTodo: (id) =>
+      // Review Tasks
+      reviewTasks: [],
+      completeReview: (id, retention) =>
         set((s) => ({
-          todos: s.todos.map((t) =>
-            t.id === id ? { ...t, completed: !t.completed } : t,
+          reviewTasks: s.reviewTasks.map((r) =>
+            r.id === id
+              ? { ...r, completed: true, completedAt: getTodayStr(), retention }
+              : r,
           ),
         })),
-      removeTodo: (id) =>
-        set((s) => ({ todos: s.todos.filter((t) => t.id !== id) })),
-      updateTodo: (id, patch) =>
+      uncompleteReview: (id) =>
         set((s) => ({
-          todos: s.todos.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+          reviewTasks: s.reviewTasks.map((r) =>
+            r.id === id
+              ? { ...r, completed: false, completedAt: undefined, retention: undefined }
+              : r,
+          ),
         })),
+
+      // Timer
+      timer: { running: false, elapsed: 0 },
+      startTimer: () =>
+        set({ timer: { running: true, startedAt: Date.now(), elapsed: get().timer.elapsed } }),
+      stopTimer: () => {
+        const t = get().timer
+        const now = Date.now()
+        const added = t.startedAt ? now - t.startedAt : 0
+        set({ timer: { running: false, startedAt: undefined, elapsed: t.elapsed + added } })
+      },
+      resetTimer: () =>
+        set({ timer: { running: false, startedAt: undefined, elapsed: 0 } }),
 
       // UI
       view: 'calendar',
@@ -89,11 +132,12 @@ export const usePlannerStore = create<PlannerState>()(
       setShowSettings: (s) => set({ showSettings: s }),
     }),
     {
-      name: 'planner-2026',
+      name: 'review-calendar-2026',
       partialize: (state) => ({
         settings: state.settings,
-        categories: state.categories,
-        todos: state.todos,
+        subjects: state.subjects,
+        studyEntries: state.studyEntries,
+        reviewTasks: state.reviewTasks,
       }),
     },
   ),

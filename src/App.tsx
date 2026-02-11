@@ -3,9 +3,9 @@ import { useState } from 'react'
 import { usePlannerStore } from '@/store'
 import SetupWizard from '@/components/SetupWizard'
 import CalendarView from '@/components/CalendarView'
-import TodoPanel from '@/components/TodoPanel'
-import CategoryManager from '@/components/CategoryManager'
-import RunnerGauge from '@/components/RunnerGauge'
+import StudyPanel from '@/components/StudyPanel'
+import SubjectManager from '@/components/SubjectManager'
+import ReviewGauge from '@/components/ReviewGauge'
 import DashboardView from '@/components/DashboardView'
 import SettingsModal from '@/components/SettingsModal'
 
@@ -30,7 +30,7 @@ export default function App() {
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
             <h1 className="text-lg font-bold text-surface-800">
-              📋 <span className="text-brand-500">{settings.year}</span> 플래너
+              🧠 <span className="text-brand-500">{settings.year}</span> 복습 캘린더
             </h1>
           </div>
 
@@ -79,25 +79,25 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 py-6">
         {view === 'calendar' ? (
           <div className="flex gap-6">
-            {/* Sidebar (categories) - desktop always, mobile toggled */}
+            {/* Sidebar (subjects) */}
             <aside
               className={`${
                 sidebarOpen ? 'block' : 'hidden'
               } lg:block w-full lg:w-72 flex-shrink-0 fixed lg:static inset-0 top-14 z-20 bg-surface-50/95 lg:bg-transparent p-4 lg:p-0 overflow-y-auto`}
             >
               <div className="space-y-4">
-                <CategoryManager />
+                <SubjectManager />
               </div>
             </aside>
 
-            {/* Calendar + Todos */}
+            {/* Calendar + Study Panel */}
             <div className="flex-1 grid grid-cols-1 xl:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <CalendarView />
-                <RunnerGauge />
+                <ReviewGauge />
               </div>
               <div>
-                <TodoPanel />
+                <StudyPanel />
               </div>
             </div>
           </div>
